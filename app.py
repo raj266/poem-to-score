@@ -4,6 +4,9 @@ except ImportError:
     pass
 
 import gradio as gr
+import edge_tts
+import asyncio
+import subprocess
 import torch
 import numpy as np
 import scipy.io.wavfile
@@ -31,7 +34,7 @@ def analyze_poem_and_orchestrate(poem):
     return f"{vibe}, high quality studio recording, 120 BPM"
 
 @spaces.GPU
-def generate_soundtrack(poem, duration=10):
+def generate_soundtrack(poem, duration=10, add_voice=False):
     """Generates the audio track based on the poem."""
     if not poem.strip():
         return None, "Please enter a poem first."
@@ -46,24 +49,40 @@ def generate_soundtrack(poem, duration=10):
         return_tensors="pt",
     )
     
-    # Calculate max tokens based on duration (50 tokens per second is a rough estimate)
     max_new_tokens = int(duration * 50)
-    
     audio_values = model.generate(**inputs, max_new_tokens=max_new_tokens)
     
     # Step 3: Process output to WAV
     sampling_rate = model.config.audio_encoder.sampling_rate
     audio_data = audio_values[0, 0].numpy()
-    
-    # Normalize audio
     audio_data = audio_data / np.max(np.abs(audio_data))
     audio_data = (audio_data * 32767).astype(np.int16)
     
-    # Save to file
-    out_filename = "soundtrack.wav"
-    scipy.io.wavfile.write(out_filename, rate=sampling_rate, data=audio_data)
+    bg_filename = "background.wav"
+    scipy.io.wavfile.write(bg_filename, rate=sampling_rate, data=audio_data)
     
-    return out_filename, music_prompt
+    # Optional Step 4: Spoken Word TTS
+    if add_voice:
+        try:
+            # Generate TTS using Edge-TTS
+            voice_file = "voice.mp3"
+            asyncio.run(edge_tts.Communicate(poem, "en-US-ChristopherNeural").save(voice_file))
+            
+            # Mix with FFmpeg (available on HF Spaces by default)
+            out_filename = "cinematic_poem.mp3"
+            # Mixing: lower background volume to 30%, keep voice at 100%
+            subprocess.run([
+                "ffmpeg", "-y", "-i", bg_filename, "-i", voice_file,
+                "-filter_complex", "[0:a]volume=0.3[bg];[1:a]volume=1.0[voice];[bg][voice]amix=inputs=2:duration=first[a]",
+                "-map", "[a]", out_filename
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return out_filename, music_prompt
+        except Exception as e:
+            print(f"TTS Error: {e}")
+            # Fallback to just music if TTS fails
+            return bg_filename, music_prompt + " (Voiceover failed, music only)"
+            
+    return bg_filename, music_prompt
 
 # 3. Build the Gradio UI
 with gr.Blocks(title="Poem to Cinematic Score") as demo:
@@ -78,7 +97,19 @@ with gr.Blocks(title="Poem to Cinematic Score") as demo:
                 label="Your Poem"
             )
             duration_slider = gr.Slider(minimum=5, maximum=15, value=10, step=1, label="Duration (Seconds)")
+            voice_toggle = gr.Checkbox(label="Add Spoken-Word Narration", value=False)
             generate_btn = gr.Button("Generate Cinematic Score", variant="primary")
+            
+            # Add the One-Click Examples here
+            gr.Examples(
+                examples=[
+                    ["The ocean raged against the black ship, a battle for the dawn. The storm will never break us.", 10, True],
+                    ["Shall I compare thee to a summer's day? Thou art more lovely and more temperate.", 10, False],
+                    ["Once upon a midnight dreary, while I pondered, weak and weary, over many a quaint and curious volume of forgotten lore.", 10, True]
+                ],
+                inputs=[poem_input, duration_slider, voice_toggle],
+                label="Click to try a sample poem"
+            )
             
         with gr.Column():
             audio_output = gr.Audio(label="Generated Soundtrack", type="filepath")
@@ -86,7 +117,7 @@ with gr.Blocks(title="Poem to Cinematic Score") as demo:
             
     generate_btn.click(
         fn=generate_soundtrack, 
-        inputs=[poem_input, duration_slider], 
+        inputs=[poem_input, duration_slider, voice_toggle], 
         outputs=[audio_output, prompt_output]
     )
 

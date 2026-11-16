@@ -2,4 +2,4 @@ torch
 transformers
 scipy
 numpy
-gradio
+gradioedge-tts
