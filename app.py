@@ -20,16 +20,17 @@ def analyze_poem_and_orchestrate(poem):
     
     # Simple sentiment/theme extraction
     if any(word in poem_lower for word in ["storm", "sea", "ocean", "wave", "sail"]):
-        vibe = "Epic swashbuckling orchestral film score, driving low strings ostinato, bold French horns, thundering timpani drums, dramatic sea adventure tempo"
+        vibe = "epic orchestral film score, dramatic sea adventure, heavy brass, thundering drums, 120 bpm"
     elif any(word in poem_lower for word in ["love", "heart", "sad", "tears", "alone"]):
-        vibe = "Melancholic cinematic cello solo, soft piano accompaniment, emotional nostalgia, slow romantic tempo"
+        vibe = "sad cinematic cello, soft emotional piano, slow romantic, 70 bpm"
     elif any(word in poem_lower for word in ["fight", "sword", "battle", "victory", "win"]):
-        vibe = "Heroic epic orchestral crescendo, triumphant brass fanfare, aggressive percussion, fast-paced battle rhythm"
+        vibe = "epic battle music, aggressive percussion, fast string ostinato, triumphant brass, 140 bpm"
     else:
-        vibe = "Dramatic cinematic ambient score, sweeping strings, gentle woodwinds, mysterious and atmospheric"
+        vibe = "cinematic ambient score, sweeping strings, mysterious, atmospheric, 90 bpm"
         
     return f"{vibe}, high quality studio recording, 120 BPM"
 
+@spaces.GPU
 def generate_soundtrack(poem, duration=10):
     """Generates the audio track based on the poem."""
     if not poem.strip():
