@@ -1,3 +1,8 @@
+try:
+    import spaces
+except ImportError:
+    pass
+
 import gradio as gr
 import torch
 import numpy as np
@@ -84,5 +89,10 @@ with gr.Blocks(title="Poem to Cinematic Score") as demo:
         outputs=[audio_output, prompt_output]
     )
 
+def _noop():
+    return None
+if "spaces" in globals():
+    _noop = spaces.GPU(_noop)
+
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(ssr_mode=False)
